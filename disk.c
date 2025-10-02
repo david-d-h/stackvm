@@ -80,8 +80,6 @@ void save_prog_to_disk(const char *path, Inst* const instructions,
 
 Inst *load_prog_from_disk(const char *path, size_t *const nread)
 {
-  // const char* errmsg = NULL;
-
   size_t nread_;
   Inst *buffer = (Inst *)load_bytes_from_disk(path, &nread_);
   assert(nread_ % sizeof(Inst) == 0);
@@ -91,28 +89,6 @@ Inst *load_prog_from_disk(const char *path, size_t *const nread)
     _bswap_inst_in_place(buffer + i);
 #endif
   return buffer;
-
-//   FILE *file = fopen(path, "rb");
-//   if (file == NULL) _DISK_IO_ERROR("could not open file");
-//   if (fseek(file, 0L, SEEK_END) != 0) _DISK_IO_ERROR("while seeking for EOF");
-//   int length = ftell(file);
-//   if (length < 0) _DISK_IO_ERROR("while trying to determine position of FD");
-//   (void)fseek(file, 0L, SEEK_SET);
-//   assert(length % sizeof(Inst) == 0);
-//   Inst *buffer = malloc(length);
-//   if (buffer == NULL) exit(1);
-//   const size_t nread_ = fread(buffer, sizeof(Inst), length / sizeof(Inst), file);
-//   if (length / sizeof(Inst) != nread_) _DISK_IO_ERROR("while trying to read whole file");
-//   *nread = nread_;
-// #if __BYTE_ORDER__ == __BSWAP_ON
-//   for (size_t i = 0; i < nread_; i++)
-//     _bswap_inst_in_place(buffer + i);
-// #endif
-//   return buffer;
-
-// IO_ERROR:
-//   fprintf(stderr, "Error: (operation on %s) %s: %s", path, errmsg, strerror(errno));
-//   exit(1);
 }
 
 #undef IO_ERROR
