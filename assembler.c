@@ -103,6 +103,12 @@ static void ctx_ins(Ctx *c, Inst instruction)
 
 static parse_error_t parse_operand(Parser *p, Value *out)
 {
+  int64_t sign = 1;
+  if (parse_peek(p).type == TOKEN_MINUS) {
+    (void)parse_advance(p);
+    sign = -1;
+  }
+
   Token t = parse_expect(p, TOKEN_INTEGER);
   if (t.type == TOKEN_ERROR) return p->error;
   assert(t.length != 0);
@@ -110,7 +116,7 @@ static parse_error_t parse_operand(Parser *p, Value *out)
   Value value = 0;
   for (size_t i = 0; i < t.length; i++)
     value = value * 10 + (t.start[i] - '0');
-  *out = value;
+  *out = value * sign;
 
   return PARSE_ERR_NONE;
 }
