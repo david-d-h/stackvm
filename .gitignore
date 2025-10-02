@@ -1,3 +1,4 @@
 build/
 assembler
+interpreter
 examples/*.ins

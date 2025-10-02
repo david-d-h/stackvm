@@ -2,11 +2,15 @@ CFLAGS = -Wall -Wextra -pedantic -std=c17 -Wswitch-enum
 
 OBJs = $(patsubst %.c,build/%.o,$(1))
 
-ASSEMBLER_OBJs := $(call OBJs, assembler.c vm.c)
+ASSEMBLER_OBJs := $(call OBJs, assembler.c vm.c disk.c)
+INTERPRET_OBJs := $(call OBJs, interpret.c vm.c disk.c)
 
 -include $(ASSEMBLER_OBJs:.o=.d)
 
-assembler: $(call OBJs, assembler.c vm.c disk.c) | build
+assembler: $(ASSEMBLER_OBJs)
+	$(CC) $(CFLAGS) -o $@ $^
+
+interpreter: $(INTERPRET_OBJs)
 	$(CC) $(CFLAGS) -o $@ $^
 
 test: tests.c
@@ -21,4 +25,4 @@ build/%.o: %.c | build
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	rm -rf build assembler examples/*.ins
+	rm -rf build assembler interpreter examples/*.ins
