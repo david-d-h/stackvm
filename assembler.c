@@ -135,8 +135,9 @@ const char *derive_out_path(const char *inpath)
 {
   size_t length = strlen(inpath);
   for (size_t i = length; i != 0;) {
-    if (inpath[--i] != '.') continue;
-    length = i;
+    if (inpath[--i] == '/') break;
+    if (inpath[i] != '.') continue;
+    length = i; break;
   }
   char *buffer = malloc(length + strlen(OUT_FILE_EXT));
   if (buffer == NULL) exit(1);
