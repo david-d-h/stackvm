@@ -18,6 +18,7 @@
   KW_JZ,                \
   KW_JNZ,               \
   KW_HALT
+#define _LEXER_TOKENIZE_NEWLINE
 #include "lexer.h"
 
 #define _(string, length) (((uint8_t)length << 4) ^ (string)[0] ^ ((string)[length - 1]))
@@ -71,27 +72,6 @@ static inst_t kw_to_inst_t(token_t kw)
   else return kw - KW_NOP;
 }
 
-static bool needs_operand(inst_t instruction)
-{
-  switch (instruction) {
-  case INST_PUSH:
-  case INST_JMP:
-  case INST_JZ:
-  case INST_JNZ:
-    return true;
-  case INST_NOP:
-  case INST_DUP:
-  case INST_ADD:
-  case INST_SUB:
-  case INST_MUL:
-  case INST_DIV:
-  case INST_EQ:
-  case INST_HALT:
-    return false;
-  default: assert(false && "invalid instruction type");
-  }
-}
-
 static void ctx_ins(Ctx *c, Inst instruction)
 {
   if (c->insts == c->instc) {
@@ -128,14 +108,18 @@ static parse_error_t instruction(Ctx *c, Parser *p)
 
   Inst instruction = {0};
   instruction.type = kw_to_inst_t(token.type);
-  if (needs_operand(instruction.type))
+  if (VM_INST_HAS_OP[instruction.type])
     parse_operand(p, &instruction.operand);
+
+  Token term = parse_expect(p, TOKEN_NEWLINE);
+  if (term.type == TOKEN_ERROR) return p->error;
+
   ctx_ins(c, instruction);
 
   return PARSE_ERR_NONE;
 }
 
-const char *OUT_FILE_EXT= ".ins";
+const char *OUT_FILE_EXT = ".ins";
 
 const char *derive_out_path(const char *inpath)
 {

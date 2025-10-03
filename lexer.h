@@ -33,6 +33,9 @@ typedef enum {
 #ifdef _LEXER_KEYWORDS
   _LEXER_KEYWORDS,
 #endif
+#ifdef _LEXER_TOKENIZE_NEWLINE
+  TOKEN_NEWLINE,
+#endif
   TOKEN_EOF,
 } token_t;
 
@@ -45,15 +48,15 @@ typedef struct {
 
 typedef enum {
   LX_ERR_NONE = 0,
-  LX_ERR_NO_STR_TERM = 1,
-} lex_error_t;
+  LX_ERR_NO_STR_TERM,
+} lx_err_t;
 
 typedef struct {
   const char *source;
   size_t cursor;
   size_t anchor;
   size_t line;
-  lex_error_t last_error;
+  lx_err_t last_error;
 } Lexer;
 
 extern token_t lx_maybe_keyword(const char *str, size_t length);
@@ -148,7 +151,7 @@ static Token _lx_string(Lexer *lx)
   // equivalent to (byte == '"' ? TOKEN_STRING : TOKEN_ERROR)
   // because TOKEN_ERROR = 0.
   token_t type = (token_t)(TOKEN_STRING * (byte == '"'));
-  lx->last_error = (lex_error_t)(byte == '"');
+  lx->last_error = (lx_err_t)(byte == '"');
   return _lx_finalize(lx, type);
 }
 
@@ -170,6 +173,9 @@ WHITESPACE:
   if (_lx_peek(lx) == '\n') {
     lx->line++;
     lx->cursor++;
+#ifdef _LEXER_TOKENIZE_NEWLINE
+    return _lx_finalize(lx, TOKEN_NEWLINE);
+#endif
     goto WHITESPACE;
   }
 

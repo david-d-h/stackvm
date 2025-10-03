@@ -54,12 +54,14 @@ typedef enum {
   VM_ERR_STACK_UNDERFLOW,
   VM_ERR_STACK_OVERFLOW,
   VM_ERR_ILLEGAL_INST,
-} err_t;
+} vm_err_t;
 
-const char* vm_err_to_cstr(err_t error);
+const char* vm_err_to_cstr(vm_err_t error);
+
+extern const bool VM_INST_HAS_OP[255];
 
 void dump_stack(VM *vm);
-err_t vm_exec(VM *vm, Inst);
-err_t vm_run(VM *vm);
+vm_err_t vm_exec(VM *vm, Inst);
+vm_err_t vm_run(VM *vm);
 
 #endif

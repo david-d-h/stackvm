@@ -5,7 +5,14 @@
 
 #include "vm.h"
 
-const char* vm_err_to_cstr(err_t error)
+const bool VM_INST_HAS_OP[255] = {
+  [INST_PUSH] = true,
+  [INST_JMP] = true,
+  [INST_JZ] = true,
+  [INST_JNZ] = true,
+};
+
+const char* vm_err_to_cstr(vm_err_t error)
 {
   switch (error) {
   case VM_ERR_NONE: return "no error";
@@ -30,7 +37,7 @@ void dump_stack(VM *vm)
   }
 }
 
-err_t vm_exec(VM *vm, Inst inst)
+vm_err_t vm_exec(VM *vm, Inst inst)
 {
   switch (inst.type) {
   case INST_NOP: break;
@@ -84,10 +91,10 @@ err_t vm_exec(VM *vm, Inst inst)
 
 #undef __binop
 
-err_t vm_run(VM *vm)
+vm_err_t vm_run(VM *vm)
 {
   while (!vm->halted) {
-    err_t result = vm_exec(vm, vm->code[vm->ip]);
+    vm_err_t result = vm_exec(vm, vm->code[vm->ip]);
     if (result != VM_ERR_NONE) return result;
   }
   return VM_ERR_NONE;

@@ -20,7 +20,7 @@ int main(int argc, const char *argv[])
   VM vm = {0};
   vm.code = code;
 
-  err_t result = vm_run(&vm);
+  vm_err_t result = vm_run(&vm);
   if (result != VM_ERR_NONE) {
     printf("Error while interpreting %s: %s\n",
            filepath,
