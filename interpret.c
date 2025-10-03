@@ -3,8 +3,6 @@
 #include "vm.h"
 #include "disk.h"
 
-const char *filepath = "examples/negative.ins";
-
 int main(int argc, const char *argv[])
 {
   if (argc != 2) {
@@ -23,7 +21,7 @@ int main(int argc, const char *argv[])
   vm_err_t result = vm_run(&vm);
   if (result != VM_ERR_NONE) {
     printf("Error while interpreting %s: %s\n",
-           filepath,
+           argv[1],
            vm_err_to_cstr(result));
     return 1;
   }
