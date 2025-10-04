@@ -75,7 +75,7 @@ static inst_t kw_to_inst_t(token_t kw)
 static void ctx_ins(Ctx *c, Inst instruction)
 {
   if (c->insts == c->instc) {
-    c->buffer = reallocf(c->buffer, c->instc * 2);
+    c->buffer = reallocf(c->buffer, c->instc *= 2 * sizeof(Inst));
     if (c->buffer == NULL) exit(1);
   }
   c->buffer[c->insts++] = instruction;
@@ -119,7 +119,7 @@ static parse_error_t instruction(Ctx *c, Parser *p)
   return PARSE_ERR_NONE;
 }
 
-const char *OUT_FILE_EXT = ".ins";
+const char *const OUT_FILE_EXT = ".ins";
 
 const char *derive_out_path(const char *inpath)
 {
