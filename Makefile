@@ -7,7 +7,7 @@ INTERPRET_OBJs := $(call OBJs, interpret.c vm.c disk.c)
 
 -include $(ASSEMBLER_OBJs:.o=.d)
 
-assembler: $(ASSEMBLER_OBJs)
+assembler: $(ASSEMBLER_OBJs) | lexer.h parser.h include/stb_ds.h
 	$(CC) $(CFLAGS) -o $@ $^
 
 interpreter: $(INTERPRET_OBJs)

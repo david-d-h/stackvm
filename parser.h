@@ -27,12 +27,11 @@ typedef struct {
 } Parser;
 
 Token parse_advance(Parser *parser);
-
 Token parse_peek(Parser *parser);
-
+Token parse_peek_one_of(Parser *parser, const token_t allowed[], size_t count);
 Token parse_expect_one_of(Parser *parser, const token_t allowed[], size_t count);
-
 Token parse_expect(Parser* parser, token_t expected);
+parse_error_t parse_skipinc(Parser *parser, token_t term);
 
 #endif
 
@@ -69,20 +68,38 @@ Token parse_peek(Parser *parser)
   return parser->peek.token;
 }
 
-Token parse_expect_one_of(Parser *parser, const token_t allowed[], size_t count)
+Token parse_peek_one_of(Parser *parser, const token_t allowed[], size_t count)
 {
   assert(count > 0);
-  Token token = parse_advance(parser);
+  Token peek = parse_peek(parser);
   bool is_allowed = false;
-  while (count != 0) is_allowed |= token.type == allowed[--count];
+  while (count != 0) is_allowed |= peek.type == allowed[--count];
   parser->error = (parse_error_t)(PARSE_ERR_UNEXPECTED_TOKEN * !is_allowed);
-  token.type = (token_t)(token.type * is_allowed);
+  peek.type = (token_t)(peek.type * is_allowed);
+  return peek;
+}
+
+Token parse_expect_one_of(Parser *parser, const token_t allowed[], size_t count)
+{
+  Token token = parse_peek_one_of(parser, allowed, count);
+  (void)parse_advance(parser);
   return token;
 }
 
 Token parse_expect(Parser *parser, token_t expected)
 {
   return parse_expect_one_of(parser, &expected, 1);
+}
+
+parse_error_t parse_skipinc(Parser *parser, token_t term)
+{
+  for (;;) {
+    Token token = parse_advance(parser);
+    if (token.type == TOKEN_EOF)
+      return parser->error = PARSE_ERR_OUT_OF_TOKENS;
+    if (token.type == TOKEN_ERROR) return parser->error;
+    if (token.type == term) return PARSE_ERR_NONE;
+  }
 }
 
 #endif

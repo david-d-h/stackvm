@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define STB_DS_IMPLEMENTATION
+#include "include/stb_ds.h"
+
 #define _LEXER_IMPL
 #define _LEXER_KEYWORDS \
   KW_NOP,               \
@@ -22,25 +25,28 @@
 #include "lexer.h"
 
 #define _(string, length) (((uint8_t)length << 4) ^ (string)[0] ^ ((string)[length - 1]))
-const token_t KEYWORD_MAP[255] = {
-  [_("nop", 3)] = KW_NOP,
-  [_("push", 4)] = KW_PUSH,
-  [_("dup", 3)] = KW_DUP,
-  [_("add", 3)] = KW_ADD,
-  [_("sub", 3)] = KW_SUB,
-  [_("mul", 3)] = KW_MUL,
-  [_("div", 3)] = KW_DIV,
-  [_("eq", 2)] = KW_EQ,
-  [_("jmp", 3)] = KW_JMP,
-  [_("jz", 2)] = KW_JZ,
-  [_("jnz", 3)] = KW_JNZ,
-  [_("halt", 4)] = KW_HALT,
+typedef struct { const char *name; token_t repr; } Kw;
+const Kw KEYWORD_MAP[255] = {
+  [_("nop", 3)] = {"nop", KW_NOP},
+  [_("push", 4)] = {"push", KW_PUSH},
+  [_("dup", 3)] = {"dup", KW_DUP},
+  [_("add", 3)] = {"add", KW_ADD},
+  [_("sub", 3)] = {"sub", KW_SUB},
+  [_("mul", 3)] = {"mul", KW_MUL},
+  [_("div", 3)] = {"div", KW_DIV},
+  [_("eq", 2)] = {"eq", KW_EQ},
+  [_("jmp", 3)] = {"jmp", KW_JMP},
+  [_("jz", 2)] = {"jz", KW_JZ},
+  [_("jnz", 3)] = {"jnz", KW_JNZ},
+  [_("halt", 4)] = {"halt", KW_HALT},
 };
 
 token_t lx_maybe_keyword(const char *str, size_t length)
 {
-  token_t index = KEYWORD_MAP[_(str, length)];
-  return index ? index : TOKEN_IDENTIFIER;
+  Kw index = KEYWORD_MAP[_(str, length)];
+  if (index.name != NULL && strncmp(str, index.name, length) == 0)
+    return index.repr;
+  else return TOKEN_IDENTIFIER;
 }
 #undef _
 
@@ -54,9 +60,21 @@ const token_t KEYWORDS[KEYWORD_COUNT] = {_LEXER_KEYWORDS};
 #include "disk.h"
 
 typedef struct {
-  Inst* buffer;
-  size_t insts;
-  size_t instc;
+  char *key;
+  size_t value;
+} Label;
+
+typedef struct {
+  char *name;
+  size_t ins;
+} LabelRef;
+
+typedef struct {
+  Inst *buffer;
+  size_t ip;
+  size_t instcap;
+  Label *labels;
+  LabelRef *unresolved;
 } Ctx;
 
 static inst_t kw_to_inst_t(token_t kw)
@@ -74,28 +92,28 @@ static inst_t kw_to_inst_t(token_t kw)
 
 static void ctx_ins(Ctx *c, Inst instruction)
 {
-  if (c->insts == c->instc) {
-    c->buffer = reallocf(c->buffer, c->instc *= 2 * sizeof(Inst));
+  if (c->ip == c->instcap) {
+    c->buffer = reallocf(c->buffer, c->instcap *= 2 * sizeof(Inst));
     if (c->buffer == NULL) exit(1);
   }
-  c->buffer[c->insts++] = instruction;
+  c->buffer[c->ip++] = instruction;
 }
 
-static parse_error_t parse_operand(Parser *p, Value *out)
+static parse_error_t parse_int_operand(Parser *p, Value *out)
 {
-  int64_t sign = 1;
+  Value sign = 1;
   if (parse_peek(p).type == TOKEN_MINUS) {
     (void)parse_advance(p);
     sign = -1;
   }
 
-  Token t = parse_expect(p, TOKEN_INTEGER);
-  if (t.type == TOKEN_ERROR) return p->error;
-  assert(t.length != 0);
+  Token token = parse_expect(p, TOKEN_INTEGER);
+  if (token.type == TOKEN_ERROR) return p->error;
+  assert(token.length != 0);
 
   Value value = 0;
-  for (size_t i = 0; i < t.length; i++)
-    value = value * 10 + (t.start[i] - '0');
+  for (size_t i = 0; i < token.length; i++)
+    value = value * 10 + (token.start[i] - '0');
   *out = value * sign;
 
   return PARSE_ERR_NONE;
@@ -108,8 +126,23 @@ static parse_error_t instruction(Ctx *c, Parser *p)
 
   Inst instruction = {0};
   instruction.type = kw_to_inst_t(token.type);
-  if (VM_INST_HAS_OP[instruction.type])
-    parse_operand(p, &instruction.operand);
+  if (VM_INST_HAS_OP[instruction.type]) {
+    switch ((uint8_t)instruction.type) {
+    case INST_JMP:
+    case INST_JZ:
+    case INST_JNZ: {
+      Token token = parse_expect(p, TOKEN_IDENTIFIER);
+      if (token.type == TOKEN_ERROR) return p->error;
+      char *ident = strndup(token.start, token.length);
+      LabelRef ref = {ident, c->ip};
+      (void)arrput(c->unresolved, ref);
+    } break;
+    default: {
+      parse_error_t result = parse_int_operand(p, &instruction.operand);
+      if (result != PARSE_ERR_NONE) return p->error;
+    } break;
+    }
+  }
 
   Token term = parse_expect(p, TOKEN_NEWLINE);
   if (term.type == TOKEN_ERROR) return p->error;
@@ -117,6 +150,31 @@ static parse_error_t instruction(Ctx *c, Parser *p)
   ctx_ins(c, instruction);
 
   return PARSE_ERR_NONE;
+}
+
+static parse_error_t label(Ctx *c, Parser *p)
+{
+  Token token = parse_expect(p, TOKEN_IDENTIFIER);
+  if (token.type == TOKEN_ERROR) return p->error;
+  Token colon = parse_expect(p, TOKEN_COLON);
+  if (colon.type == TOKEN_ERROR) return p->error;
+  Token term = parse_expect(p, TOKEN_NEWLINE);
+  if (term.type == TOKEN_ERROR) return p->error;
+  
+  char *ident = strndup(token.start, token.length);
+  // TODO: error reporting?
+  if (shgeti(c->labels, ident) != -1) return PARSE_ERR_UNEXPECTED_TOKEN;
+  shput(c->labels, ident, c->ip);
+  return PARSE_ERR_NONE;
+}
+
+static parse_error_t label_or_ins(Ctx *c, Parser *p)
+{
+  const token_t allowed[1 + KEYWORD_COUNT] = {TOKEN_IDENTIFIER, _LEXER_KEYWORDS};
+  Token peek = parse_peek_one_of(p, allowed, 1 + KEYWORD_COUNT);
+  if (peek.type == TOKEN_ERROR) return p->error;
+  else if (peek.type == TOKEN_IDENTIFIER) return label(c, p);
+  else return instruction(c, p);
 }
 
 const char *const OUT_FILE_EXT = ".ins";
@@ -153,20 +211,33 @@ int main(int argc, const char *argv[])
   p.lx = &lx;
   Ctx ctx = {
     .buffer = malloc(128 * sizeof(Inst)),
-    .insts = 0,
-    .instc = 128,
+    .ip = 0,
+    .instcap = 128,
+    .labels = NULL,
   };
 
   for (;;) {
     if (parse_peek(&p).type == TOKEN_EOF) break;
-    parse_error_t result = instruction(&ctx, &p);
+    parse_error_t result = label_or_ins(&ctx, &p);
     if (result != PARSE_ERR_NONE) {
       printf("ERROR: error while compiling instruction: %u\n", result);
       return 1;
     }
   }
 
+  size_t length = arrlenu(ctx.unresolved);
+  for (size_t i = 0; i < length; i++) {
+    LabelRef ref = ctx.unresolved[i];
+    Inst *inst = &ctx.buffer[ref.ins];
+    Label *label = shgetp_null(ctx.labels, ref.name);
+    if (label == NULL) {
+      printf("ERROR: error while resolving labels: %s is not defined", ref.name);
+      return 1;
+    }
+    inst->operand = (int64_t)label->value - (int64_t)ref.ins;
+  }
+
   const char *output = derive_out_path(argv[1]);
-  save_prog_to_disk(output, ctx.buffer, ctx.insts);
+  save_prog_to_disk(output, ctx.buffer, ctx.ip);
   return 0;
 }
